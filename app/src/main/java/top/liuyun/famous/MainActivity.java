@@ -12,6 +12,7 @@ import android.widget.EditText;
 import android.widget.GridView;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.gson.Gson;
 
@@ -39,16 +40,31 @@ public class MainActivity extends AppCompatActivity {
     private CommonAdapter<BookBean.DatasBean.DaysBean> commonAdapter;
     private int start=-1;
     private int end=-1;
+    private boolean Tag;
+    private int startMonth;
+    private int endMonth;
     private Button btn0;
     private String last_month;
     private String next_month;
+    private OkHttpClient client;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initView();
+        client = new OkHttpClient();
         initDate("");
+    }
+
+    public void cancelAll() {
+        for (Call call : client.dispatcher().queuedCalls()) {
+                call.cancel();
+        }
+
+        for (Call call : client.dispatcher().runningCalls()) {
+                call.cancel();
+        }
     }
 
     private void initDate(final String months) {
@@ -59,16 +75,16 @@ public class MainActivity extends AppCompatActivity {
 //        String url1=url+months;
         list.clear();
         Log.e("OOOO",url1);
-        OkHttpClient client = new OkHttpClient();
         Request re = new Request.Builder().url(url1).build();
         client.newCall(re).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                Log.e("jjj","上班");
+
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
+                list.clear();
                 String json = response.body().string();
                 Gson gson = new Gson();
                 BookBean bookBean = gson.fromJson(json, BookBean.class);
@@ -81,6 +97,16 @@ public class MainActivity extends AppCompatActivity {
                         list.add(new BookBean.DatasBean.DaysBean());
                     }
                     list.addAll(bookBean.getDatas().getDays());
+                    if(startMonth!=0){
+                        for (int j = 0; j < list.size(); j++) {
+                            if(list.get(j).getDate()!=null){
+                                int date =getDate(list.get(j).getDate());
+                                if(date>=startMonth&&date<=endMonth){
+                                    list.get(j).setIs_select("1");
+                                }
+                            }
+                        }
+                    }
                     Log.e("OOOl",list.size()+"");
                     runOnUiThread(new Runnable() {
                         @Override
@@ -106,20 +132,30 @@ public class MainActivity extends AppCompatActivity {
                 if("0".equals(daysBean.getIs_buy())||daysBean.getIs_buy()==null){
                     return;
                 }
-
-                if(start==-1){
-                    start = position;
+                int date =getDate(daysBean.getDate());
+                if(!Tag){
                     for (int i = 0; i < list.size(); i++) {
                         list.get(i).setIs_select("0");
                     }
                     list.get(position).setIs_select("1");
+                    startMonth=date;
+                    endMonth=date;
+                    Tag=true;
                 }
                 else {
-                    if(position>=start){
-                        for (int i = start; i <=position ; i++) {
-                            list.get(i).setIs_select("1");
+                    if(date>=startMonth){
+                        endMonth=date;
+                        for (int i =0; i <=position ; i++) {
+                            if(list.get(i).getDate()!=null){
+                                int g =getDate(list.get(i).getDate());
+                                if(g<=endMonth&&g>=startMonth){
+                                    list.get(i).setIs_select("1");
+                                }
+                            }
                         }
-                        start=-1;
+                        Tag=false;
+                    }else {
+                        Toast.makeText(MainActivity.this,"离开日期不能小于入住日期",Toast.LENGTH_SHORT).show();
                     }
                 }
                 commonAdapter.notifyDataSetChanged();
@@ -150,6 +186,7 @@ public class MainActivity extends AppCompatActivity {
         btn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                cancelAll();
                 initDate(next_month);
                 if(start!=-1){
                     start=0;
@@ -159,12 +196,26 @@ public class MainActivity extends AppCompatActivity {
         btn0.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                cancelAll();
                 initDate(last_month);
                 if(start!=-1){
                     start=0;
                 }
             }
         });
+    }
+
+    private int getDate(String s){
+        if(s==null){
+            return 0;
+        }else {
+            int one=s.indexOf("-");
+            int two=s.lastIndexOf("-");
+            String year=s.substring(0,one);
+            String month=s.substring(one+1,two);
+            String day=s.substring(two+1);
+            return Integer.parseInt(year+(month.length()==1?(0+month):(month))+(day.length()==1?(0+day):(day)));
+        }
     }
 
     @Override
